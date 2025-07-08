@@ -1,0 +1,73 @@
+import numpy as np
+import os
+from PIL import Image
+
+# Define dimensions
+length, width, height = 398, 171, 129  # meters => voxel units (1:1 scale)
+thickness = 4  # shell thickness in blocks
+
+# Initialize a 3D array for the voxel model
+voxels = np.zeros((length, width, height), dtype=np.uint8)
+
+# Define the shell: fill the outer hull
+voxels[:thickness, :, :] = 1
+voxels[-thickness:, :, :] = 1
+voxels[:, :thickness, :] = 1
+voxels[:, -thickness:, :] = 1
+voxels[:, :, :thickness] = 1
+voxels[:, :, -thickness:] = 1
+
+# Prepare a MagicaVoxel-compatible .vox format using numpy-vox-io if available
+# Since that library is not available here, we’ll write a raw .vox format manually
+
+# VOX format header and model encoding (very simplified for 1 color and 1 model)
+def write_basic_vox(filename, voxels):
+    x, y, z = voxels.shape
+    voxel_data = []
+
+    for i in range(x):
+        for j in range(y):
+            for k in range(z):
+                if voxels[i, j, k]:
+                    voxel_data.append((i, j, k, 1))  # position + color index
+
+    with open(filename, 'wb') as f:
+        # VOX header
+        f.write(b'VOX ')
+        f.write((150).to_bytes(4, 'little'))  # version
+
+        # MAIN chunk
+        f.write(b'MAIN')
+        f.write((0).to_bytes(4, 'little'))  # no content
+        content_size = 12 + len(voxel_data) * 4
+        f.write((content_size + 12).to_bytes(4, 'little'))  # total children size
+
+        # SIZE chunk
+        f.write(b'SIZE')
+        f.write((12).to_bytes(4, 'little'))  # size of content
+        f.write((0).to_bytes(4, 'little'))  # no children
+        f.write((x).to_bytes(4, 'little'))
+        f.write((y).to_bytes(4, 'little'))
+        f.write((z).to_bytes(4, 'little'))
+
+        # XYZI chunk
+        f.write(b'XYZI')
+        num_voxels = len(voxel_data)
+        f.write((num_voxels * 4 + 4).to_bytes(4, 'little'))
+        f.write((0).to_bytes(4, 'little'))  # no children
+        f.write((num_voxels).to_bytes(4, 'little'))
+        for vx, vy, vz, color_index in voxel_data:
+            f.write(bytes([vx, vy, vz, color_index]))
+
+        # RGBA chunk (default palette)
+        f.write(b'RGBA')
+        f.write((256 * 4).to_bytes(4, 'little'))  # 256 colors
+        f.write((0).to_bytes(4, 'little'))  # no children
+        for i in range(256):
+            f.write(bytes([255, 255, 255, 255]))  # white color for all
+
+# File path to save .vox
+vox_output_path = "/mnt/data/birmingham_hollow_shell.vox"
+write_basic_vox(vox_output_path, voxels)
+
+vox_output_path
